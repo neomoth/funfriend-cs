@@ -14,7 +14,7 @@ public static class ConfigManager
 		{ "buddies", new Dictionary<string, object> { { "types", "funfriend" } } }
 	};
 
-	private static bool _configInitialized = false;
+	private static bool _configInitialized;
 	private static Dictionary<string, Dictionary<string, object>> _config = [];
 
 	public static Dictionary<string, Dictionary<string, object>> Config
@@ -47,7 +47,7 @@ public static class ConfigManager
 			{
 				var xdgConfigHome = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
 				path = Path.Combine(
-					xdgConfigHome ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Personal),
+					xdgConfigHome ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
 						".config"), ApplicationName);
 				break;
 			}
@@ -55,6 +55,8 @@ public static class ConfigManager
 				throw new NotSupportedException("Platform not supported.");
 		}
 
+		Console.WriteLine(path);
+		
 		return path;
 	}
 
@@ -65,6 +67,8 @@ public static class ConfigManager
 
 		var configFile = Path.Combine(configPath, ConfigName);
 
+		// Logger.GetLogger("config manager").LogInformation($"config path: {configFile}");
+		
 		if (!File.Exists(configFile))
 		{
 			_config = new Dictionary<string, Dictionary<string, object>>(DefaultConfig);
@@ -87,6 +91,7 @@ public static class ConfigManager
 						if (castedValue is not null)
 						{
 							_config[section.Key][keyValuePair.Key] = castedValue;
+							Console.WriteLine(castedValue);
 						}
 					}
 					else

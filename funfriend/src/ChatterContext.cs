@@ -19,14 +19,14 @@ public class ChatterContext : WindowContext
 	public ChatterContext(string text, string font, Vec2 pos, float duration = DefaultDuration,
 		WindowContext? parent = null)
 		: base("??__FUNFRIEND__?? > CHATTER", (int)DefaultWindowSize.X + Padding * 2,
-			(int)DefaultWindowSize.Y + Padding * 2, false)
+			(int)DefaultWindowSize.Y + Padding * 2, true)
 	{
 		var fntPath = Path.Combine(FunFriend.AssetsDirectory, font);
 		var sheet = FontManager.ParseBm(File.ReadAllText(fntPath+".fnt"));
 		var positionData = FontManager.PositionText(text, sheet);
 		
 		WindowSize = new Vec2(positionData.Width, positionData.Height) + Padding * 2;
-
+		
 		unsafe
 		{
 			GLFW.MakeContextCurrent(Window);
@@ -79,6 +79,7 @@ public class ChatterContext : WindowContext
 		{
 			Close();
 			CleanUp();
+			return;
 		}
 
 		UpdatePosition();

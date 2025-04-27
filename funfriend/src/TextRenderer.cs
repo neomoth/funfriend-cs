@@ -59,6 +59,8 @@ public class TextRenderer
 
 	public void Render(float dt)
 	{
+		GL.ClearColor(0,0,0,1);
+		GL.Clear(ClearBufferMask.ColorBufferBit);
 		GL.Enable(EnableCap.Blend);
 		GL.BlendFunc((BlendingFactor)BlendingFactorSrc.SrcAlpha, (BlendingFactor)BlendingFactorDest.OneMinusSrcAlpha);
 

@@ -39,10 +39,13 @@ public class BuddyContext : WindowContext
 	private double EasingDur { get; set; } = 0.0;
 	private double EasingT { get; set; } = 0.0;
 
-	private ILogger<BuddyContext> logger;
+	private readonly ILogger<BuddyContext> logger;
+
+	private GLFWCallbacks.MouseButtonCallback mcb;
+	private GLFWCallbacks.KeyCallback kcb;
 	
 	public BuddyContext(Buddy buddy) : base(
-		title: $"??_{buddy.Name()}__??", width: WindowSize().Xi(), height: WindowSize().Yi(), true)
+		title: $"??_{buddy.Name()}__??", width: WindowSize().Xi(), height: WindowSize().Yi(), false)
 	{
 		Buddy = buddy;
 
@@ -53,7 +56,8 @@ public class BuddyContext : WindowContext
 		unsafe
 		{
 			GLFW.MakeContextCurrent(Window);
-			GLFW.SetMouseButtonCallback(Window, (window, button, action, mods) =>
+
+			mcb = (window, button, action, mods) =>
 			{
 				if (button is MouseButton.Left)
 				{
@@ -73,19 +77,28 @@ public class BuddyContext : WindowContext
 						}
 
 						HeldTimer = StayStillAfterHeld;
-						GLFW.SetCursor(Window, GLFW.CreateStandardCursor(CursorShape.PointingHand));
+						GLFW.SetCursor(Window, GLFW.CreateStandardCursor(CursorShape.ResizeAll));
+					}
+					else if (action is InputAction.Release)
+					{
+						Held = false;
+						GLFW.SetCursor(Window, GLFW.CreateStandardCursor(CursorShape.Arrow));
 					}
 				}
-			});
+			};
+			
+			GLFW.SetMouseButtonCallback(Window, mcb);
 
-			GLFW.SetKeyCallback(Window, (window, key, code, action, mods) =>
+			kcb = (window, key, code, action, mods) =>
 			{
 				if (action is InputAction.Press && key is Keys.Escape)
 				{
 					Close();
 					CleanUp();
 				}
-			});
+			};
+			
+			GLFW.SetKeyCallback(Window, kcb);
 
 			var primaryMonitor = GLFW.GetPrimaryMonitor();
 			GLFW.GetMonitorPos(primaryMonitor, out var x, out var y);
@@ -97,6 +110,12 @@ public class BuddyContext : WindowContext
 
 			var chatter = Buddy.Dialog(DialogType.Chatter);
 			ChatterArray = chatter.ElementAt(Random.Shared.Next(0, chatter.Count));
+			
+			if (GLFW.GetError(out var errorMessage) is not ErrorCode.NoError)
+			{
+				Console.WriteLine("GLFW Error: " + errorMessage);
+			}
+
 		}
 	}
 	
@@ -107,7 +126,7 @@ public class BuddyContext : WindowContext
 	}
 
 	private bool Moving => EasingDur != 0 && EasingT <= EasingDur;
-	private bool Speaking => ChatterIndex < ChatterArray.Count;
+	private bool Speaking => ChatterIndex < ChatterArray.Count(x => true);
 
 	private Behavior CurrentBehavior => Speaking ? Behavior.Follow : Behavior.Wander;
 
@@ -139,14 +158,14 @@ public class BuddyContext : WindowContext
 					{
 						unsafe
 						{
-							GLFW.GetCursorPos(Window, out var cx, out var cy);
-							GLFW.GetWindowPos(Window, out var wx, out var wy);
+							GLFW.GetCursorPos(Window, out var xDist, out var yDist);
+							GLFW.GetWindowPos(Window, out var xTarget, out var yTarget);
 
-							if (Math.Abs(cx) > FollowDist) wx += (int)cx - FollowDist * Math.Sign(cx);
-							if (Math.Abs(cy) > FollowDist) wy += (int)cy - FollowDist * Math.Sign(cy);
+							if (Math.Abs(xDist) > FollowDist) xTarget += (int)xDist - FollowDist * Math.Sign(xDist);
+							if (Math.Abs(yDist) > FollowDist) yTarget += (int)yDist - FollowDist * Math.Sign(yDist);
 
-							Vec2 targetPos = new Vec2(wx, wy);
-							Goto(targetPos, 2f, false);
+							Vec2 targetPos = new Vec2(xTarget, yTarget);
+							Goto(targetPos, 1);
 						}
 					}
 					break;
@@ -154,7 +173,43 @@ public class BuddyContext : WindowContext
 		}
 	}
 
-	public void Goto(Vec2 destination, float duration, bool setStatic)
+	private void UpdatePos(float delta)
+	{
+		if (Held)
+		{
+			unsafe
+			{
+				GLFW.GetCursorPos(Window, out var cx, out var cy);
+				GLFW.GetWindowPos(Window, out var wx, out var wy);
+				StaticPos = new Vec2(wx, wy) - HeldAt + new Vec2((float)cx, (float)cy);
+				GLFW.SetWindowPos(Window, StaticPos.Xi(), StaticPos.Yi());
+				logger.LogInformation($"Held at: {HeldAt}, static pos: {StaticPos}, cursor pos: {cx}, {cy}");
+			}
+		}
+		else
+		{
+			HeldTimer -= delta;
+			if (HeldTimer <= 0)
+			{
+				UpdateWander(delta);
+
+				if (WaitingForStablePos)
+				{
+					WaitingForStablePos = false;
+
+					if (!Speaking)
+					{
+						Say(StaticPos.Distance(StartedHoldingAt) > 50
+							? Buddy.Dialog(DialogType.Moved)
+							: Buddy.Dialog(DialogType.Touched));
+					}
+				}
+			}
+			else WaitingForStablePos = true;
+		}
+	}
+	
+	public void Goto(Vec2 destination, float duration, bool setStatic = true)
 	{
 		if (setStatic) StaticPos = destination;
 
@@ -171,42 +226,18 @@ public class BuddyContext : WindowContext
 
 	public override void Update(float delta)
 	{
-		if (Held)
-		{
-			unsafe
-			{
-				GLFW.GetCursorPos(Window, out var cx, out var cy);
-
-				int dx = (int)(cx - HeldAt.X);
-				int dy = (int)(cy - HeldAt.Y);
-
-				GLFW.GetWindowPos(Window, out var wx, out var wy);
-				GLFW.SetWindowPos(Window, wx + dx, wy + dy);
-
-				if (HeldTimer > 0)
-				{
-					HeldTimer -= delta;
-					if (HeldTimer <= 0)
-					{
-						GLFW.GetWindowPos(Window, out wx, out wy);
-						StaticPos = new Vec2(wx, wy);
-						logger.LogInformation($"FinalPos: {StaticPos}");
-					}
-				}
-			}
-		}
-		else UpdateWander(delta);
-
 		ChatterTimer -= delta;
 		if (ChatterTimer <= 0)
 		{
-			Say(ChatterArray[ChatterIndex]);
-			ChatterIndex = (ChatterIndex + 1) % ChatterArray.Count;
-			ChatterTimer = ChatterTime;
+			ChatterTimer += ChatterTime;
+
+			if (ChatterArray?.ElementAtOrDefault(ChatterIndex) is not null) Say(ChatterArray[ChatterIndex]);
+			ChatterIndex++;
 		}
 
+		UpdatePos(delta);
+		
 		Renderer.Render(delta, WindowSize().Xi(), WindowSize().Yi());
-		unsafe { GLFW.SwapBuffers(Window); }
 	}
 
 	public void Say(string text)
@@ -229,15 +260,15 @@ public class BuddyContext : WindowContext
 	}
 
 	public void Say(List<string> text)
-	{
-		ChatterArray = text;
-		ChatterTimer = 0;
-		ChatterIndex = 0;
-	}
+    {
+        ChatterArray = text;
+        ChatterTimer = 0;
+        ChatterIndex = 0;
+    }
 
 	public void Say(List<List<string>> text)
 	{
-		if(text.Count>0) Say(text.ElementAt(Random.Shared.Next(0, text.Count)));
+		if(text.Count>0) Say(text[new Random().Next(text.Count)]);
 	}
 
 	public override void CleanUp()

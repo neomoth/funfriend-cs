@@ -1,4 +1,5 @@
 ﻿using funfriend.buddies;
+using Microsoft.Extensions.Logging;
 using OpenTK.Graphics.OpenGL;
 using OpenTK.Windowing.GraphicsLibraryFramework;
 namespace funfriend;
@@ -16,7 +17,7 @@ public static class FunFriend
 
 	private static void InitContexts()
 	{
-		AddContext(new BuddyContext(new FunfriendBuddy()));
+		AddContext(new BuddyContext(new CatfriendBuddy()));
 	}
 
 	public static void QueueAddContext(WindowContext context) => ContextsToAdd.Add(context);
@@ -28,11 +29,19 @@ public static class FunFriend
 	
 	public static void Main(string[] args)
 	{
+		// GLFW.InitHint(InitHintInt.WaylandLibDecor, 0);
+		GLFW.InitHint(InitHintANGLEPlatformType.ANGLEPlatformType, ANGLEPlatformType.OpenGL);
+		if(Environment.OSVersion.Platform is PlatformID.Unix) GLFW.InitHint(InitHintPlatform.Platform, Platform.X11);
+		
+		Console.WriteLine("GDK_BACKEND: " + Environment.GetEnvironmentVariable("GDK_BACKEND"));
+		Console.WriteLine("LIBGL_ALWAYS_INDIRECT: " + Environment.GetEnvironmentVariable("LIBGL_ALWAYS_INDIRECT"));
 		GLFW.Init();
 		ConfigManager.Init();
 		Logger.Init();
 		SoundManager.Init();
 
+		var logger = Logger.GetLogger("main");
+		
 		InitContexts();
 
 		float lastTime = 0;
@@ -51,17 +60,22 @@ public static class FunFriend
 			
 			foreach (WindowContext context in Contexts)
 			{
-				unsafe
+				if (!context.Closed)
 				{
-					if (GLFW.WindowShouldClose(context.Window))
+					logger.LogInformation("Rendering context {Context}", context);
+					unsafe
 					{
-						context.Close();
-						context.CleanUp();
-						continue;
+						if (GLFW.WindowShouldClose(context.Window))
+						{
+							context.Close();
+							context.CleanUp();
+							continue;
+						}
+
+						GLFW.MakeContextCurrent(context.Window);
+						context.Update(delta);
+						if(!context.Closed) GLFW.SwapBuffers(context.Window);
 					}
-					GLFW.MakeContextCurrent(context.Window);
-					context.Update(delta);
-					GLFW.SwapBuffers(context.Window);
 				}
 			}
 			

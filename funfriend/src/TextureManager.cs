@@ -6,6 +6,11 @@ namespace funfriend;
 
 public static class TextureManager
 {
+	// static TextureManager()
+	// {
+	// 	StbImage.stbi_set_flip_vertically_on_load(1);
+	// }
+	
 	public static readonly Dictionary<TextureParameterName, int> DefaultTextureParameters = new()
 	{
 		{ TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToBorder },
@@ -23,14 +28,16 @@ public static class TextureManager
 
 	public static SizedTexture LoadTexture(string filepath, Dictionary<TextureParameterName, int>? parameters = null)
 	{
+		// StbImage.stbi_set_flip_vertically_on_load(filepath.Contains("font") ? 0 : 1); // for some reason buddies are upside down??? but not text??? idfk man
+
 		parameters ??= DefaultTextureParameters;
 
 		string fullPath = Path.Combine(FunFriend.AssetsDirectory, filepath);
-		Logger.GetLogger("texture manager").LogInformation($"filepath: {fullPath}");
+		// Logger.GetLogger("texture manager").LogInformation($"filepath: {fullPath}");
 		
 		int texture = GL.GenTexture();
 		int width = 0, height = 0;
-
+		
 		ImageResult image = ImageResult.FromStream(File.OpenRead(fullPath), ColorComponents.RedGreenBlueAlpha);
 
 		var data = image.Data.ToArray();

@@ -1,3 +1,4 @@
+using System.Globalization;
 using funfriend.buddies;
 using Microsoft.Extensions.Logging;
 using OpenTK.Graphics.OpenGL;
@@ -13,7 +14,6 @@ public class BuddyRenderer
 	public int BgShader { get; }
 	public int VertexArray { get; }
 	public int VertexBuffer { get; }
-	public int IndexBuffer { get; }
 	public TextureManager.TextureBasket Textures { get; }
 	public TextureManager.SizedTexture? BgTexture { get; }
 
@@ -23,16 +23,16 @@ public class BuddyRenderer
 	{
 		Buddy = buddy;
 		(BuddyShader, BgShader) = InitShaders();
-		(VertexArray, VertexBuffer, IndexBuffer) = InitBuffers();
+		(VertexArray, VertexBuffer) = InitBuffers();
 		Textures = buddy.Textures();
 		BgTexture = buddy.BgTexture();
 		
 		logger = Logger.GetLogger<BuddyRenderer>();
-		logger.LogInformation("Texture count: {Count}", Textures.Textures.Count);
-		foreach (var tex in Textures.Textures)
-		{
-			logger.LogInformation("Texture {Id}: {Width}x{Height}", tex.Tex, tex.Width, tex.Height);
-		}
+		// logger.LogInformation("Texture count: {Count}", Textures.Textures.Count);
+		// foreach (var tex in Textures.Textures)
+		// {
+			// logger.LogInformation("Texture {Id}: {Width}x{Height}", tex.Tex, tex.Width, tex.Height);
+		// }
 
 	}
 
@@ -45,7 +45,7 @@ public class BuddyRenderer
 		}
 	}
 	
-	private (int, int, int) InitBuffers()
+	private (int, int) InitBuffers()
 	{
 		float[] vertices =
 		[
@@ -77,10 +77,10 @@ public class BuddyRenderer
 		GL.BindBuffer(BufferTarget.ElementArrayBuffer, iBuf);
 		GL.BufferData(BufferTarget.ElementArrayBuffer, indices.Length * sizeof(uint), indices, BufferUsageHint.StaticDraw);
 		
-		GL.BindVertexArray(0);
-		GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
+		// GL.BindVertexArray(0);
+		// GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
 		
-		return (vArr, vBuf, iBuf);
+		return (vArr, vBuf);
 	}
 
 	private (int, int) InitShaders()
@@ -92,9 +92,9 @@ public class BuddyRenderer
 
 	public void Render(float delta, int width, int height)
 	{
-		GL.Viewport(0, 0, width, height);
 		GL.ClearColor(0f, 0f, 0f, 0f);
 		GL.Clear(ClearBufferMask.ColorBufferBit);
+		GL.Viewport(0, 0, width, height);
 		
 		Textures.Update(delta);
 		var frame = Textures.Texture;
@@ -102,41 +102,34 @@ public class BuddyRenderer
 		GL.Enable(EnableCap.Blend);
 		GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
 
+		GL.ActiveTexture(TextureUnit.Texture0);
+		
 		if (BgTexture is not null)
 		{
-			GL.ActiveTexture(TextureUnit.Texture0);
 			GL.BindTexture(TextureTarget.Texture2D, BgTexture.Value.Tex);
 			GL.UseProgram(BgShader);
 			GL.Uniform1(GL.GetUniformLocation(BgShader, "texture1"), 0);
 			GL.BindVertexArray(VertexArray);
 			GL.DrawElements(PrimitiveType.Triangles, 6, DrawElementsType.UnsignedInt, IntPtr.Zero);
-			GL.UseProgram(0);
-			GL.BindVertexArray(0);
+			// GL.UseProgram(0);
+			// GL.BindVertexArray(0);
 		}
 		
-		GL.ActiveTexture(TextureUnit.Texture0);
+		// GL.ActiveTexture(TextureUnit.Texture1);
 		GL.BindTexture(TextureTarget.Texture2D, frame.Tex);
 		GL.UseProgram(BuddyShader);
-		
-		int texLoc = GL.GetUniformLocation(BuddyShader, "texture1");
-		int sizeLoc = GL.GetUniformLocation(BuddyShader, "funfriendSize");
-		int resLoc = GL.GetUniformLocation(BuddyShader, "resolution");
-		int timeLoc = GL.GetUniformLocation(BuddyShader, "time");
-
-		logger.LogInformation("Uniform locations - tex: {Tex}, size: {Size}, res: {Res}, time: {Time}",
-			texLoc, sizeLoc, resLoc, timeLoc);
 
 		GL.Uniform1(GL.GetUniformLocation(BuddyShader, "texture1"), 0);
 		GL.Uniform2(GL.GetUniformLocation(BuddyShader, "funfriendSize"), FunfriendSize.X, FunfriendSize.Y);
-		GL.Uniform2(GL.GetUniformLocation(BuddyShader, "resolution"), width, height);
+		GL.Uniform2(GL.GetUniformLocation(BuddyShader, "resolution"), (float)width, height);
 		GL.Uniform1(GL.GetUniformLocation(BuddyShader, "time"), (float)GLFW.GetTime());
-
+		
+		// logger.LogInformation(GLFW.GetTime().ToString(CultureInfo.InvariantCulture));
+		
+		// logger.LogInformation("funfriend size: {FunfriendSizeX}x{FunfriendSizeY}", FunfriendSize.X, FunfriendSize.Y);
 		
 		GL.BindVertexArray(VertexArray);
 		GL.DrawElements(PrimitiveType.Triangles, 6, DrawElementsType.UnsignedInt, IntPtr.Zero);
-		GL.UseProgram(0);
-		GL.BindVertexArray(0);
-		GL.BindTexture(TextureTarget.Texture2D, 0);
 	}
 
 	public void CleanUp()

@@ -50,6 +50,6 @@ void main() {
 
 	// ooo you're a vflipper... you like flipping your y coordinate.... ooooo
 	uv.y = 1.0 - uv.y;
-
+	
 	FragColor = texture(texture1, uv);
 }
